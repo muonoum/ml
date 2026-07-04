@@ -75,17 +75,17 @@ fn read_ilst_atom(
   results: Dict(BitArray, BitArray),
 ) -> Result(Dict(BitArray, BitArray), String) {
   case data {
-    <<size:int-32, 0xa9, kind:bytes-3, payload:bytes-size(size - 8), rest:bits>> ->
-      read_data_atom(payload)
-      |> dict.insert(results, <<"_", kind:bits>>, _)
-      |> read_ilst_atom(rest, _)
-
     <<size:int-32, "----", payload:bytes-size(size - 8), rest:bits>> -> {
       let #(key, value) = read_freeform_atom(payload, option.None, option.None)
 
       dict.insert(results, key, value)
       |> read_ilst_atom(rest, _)
     }
+
+    <<size:int-32, 0xa9, kind:bytes-3, payload:bytes-size(size - 8), rest:bits>> ->
+      read_data_atom(payload)
+      |> dict.insert(results, <<"_", kind:bits>>, _)
+      |> read_ilst_atom(rest, _)
 
     <<size:int-32, kind:bytes-4, payload:bytes-size(size - 8), rest:bits>> ->
       read_data_atom(payload)
