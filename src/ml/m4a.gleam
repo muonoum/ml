@@ -6,7 +6,7 @@ import gleam/string
 import gleam_community/ansi
 
 pub fn read(data: BitArray) -> Result(Nil, String) {
-  read_chunk(data, context: [])
+  read_chunk(data, path: [])
 }
 
 // TODO: Samle opp i stedet for print
@@ -15,7 +15,7 @@ pub fn read(data: BitArray) -> Result(Nil, String) {
 
 fn read_chunk(
   data: BitArray,
-  context context: List(BitArray),
+  path path: List(BitArray),
 ) -> Result(Nil, String) {
   case data {
     <<
@@ -28,13 +28,13 @@ fn read_chunk(
     >> -> {
       let kind = <<"data">>
 
-      case context {
+      case path {
         [<<"trkn">>, <<"ilst">>, <<"meta">>, <<"udta">>, <<"moov">>] ->
           case data {
             <<_padding:bits-16, current:int-16, total:int-16, _padding:bits-16>> -> {
               let data = int.to_string(current) <> "/" <> int.to_string(total)
-              print(kind:, data: <<data:utf8>>, context:)
-              read_chunk(rest, context:)
+              print(kind:, data: <<data:utf8>>, path:)
+              read_chunk(rest, path:)
             }
 
             _else -> Error("trkn/data")
@@ -44,17 +44,17 @@ fn read_chunk(
           case data {
             <<_padding:bits-16, current:int-16, total:int-16>> -> {
               let data = int.to_string(current) <> "/" <> int.to_string(total)
-              print(kind:, data: <<data:utf8>>, context:)
-              read_chunk(rest, context:)
+              print(kind:, data: <<data:utf8>>, path:)
+              read_chunk(rest, path:)
             }
 
             _else -> Error("disk/data")
           }
 
         _else -> {
-          print(kind:, data:, context:)
-          let _ = read_chunk(data, context: [kind, ..context])
-          read_chunk(rest, context:)
+          print(kind:, data:, path:)
+          let _ = read_chunk(data, path: [kind, ..path])
+          read_chunk(rest, path:)
         }
       }
     }
@@ -67,8 +67,8 @@ fn read_chunk(
       data:bytes-size(size - 12),
       rest:bits,
     >> -> {
-      let _ = read_chunk(data, context: [<<"mean">>, ..context])
-      read_chunk(rest, context:)
+      let _ = read_chunk(data, path: [<<"mean">>, ..path])
+      read_chunk(rest, path:)
     }
 
     <<
@@ -79,9 +79,9 @@ fn read_chunk(
       data:bytes-size(size - 12),
       rest:bits,
     >> -> {
-      print(kind: <<"name">>, data:, context:)
-      let _ = read_chunk(data, context: [<<"name">>, ..context])
-      read_chunk(rest, context:)
+      print(kind: <<"name">>, data:, path:)
+      let _ = read_chunk(data, path: [<<"name">>, ..path])
+      read_chunk(rest, path:)
     }
 
     <<
@@ -91,23 +91,23 @@ fn read_chunk(
       data:bytes-size(size - 12),
       rest:bits,
     >> -> {
-      let _ = read_chunk(data, context: [<<"meta">>, ..context])
-      read_chunk(rest, context:)
+      let _ = read_chunk(data, path: [<<"meta">>, ..path])
+      read_chunk(rest, path:)
     }
 
     <<size:int-32, "----", data:bytes-size(size - 8), rest:bits>> -> {
-      let _ = read_chunk(data, context: [<<"----">>, ..context])
-      read_chunk(rest, context:)
+      let _ = read_chunk(data, path: [<<"----">>, ..path])
+      read_chunk(rest, path:)
     }
 
     <<size:int-32, 0xa9, kind:bytes-3, data:bytes-size(size - 8), rest:bits>> -> {
-      let _ = read_chunk(data, context: [<<"_", kind:bits>>, ..context])
-      read_chunk(rest, context:)
+      let _ = read_chunk(data, path: [<<"_", kind:bits>>, ..path])
+      read_chunk(rest, path:)
     }
 
     <<size:int-32, kind:bytes-4, data:bytes-size(size - 8), rest:bits>> -> {
-      let _ = read_chunk(data, context: [kind, ..context])
-      read_chunk(rest, context:)
+      let _ = read_chunk(data, path: [kind, ..path])
+      read_chunk(rest, path:)
     }
 
     _else -> Ok(Nil)
@@ -133,25 +133,17 @@ fn format_value(bits: BitArray) -> String {
 fn print(
   kind kind: BitArray,
   data data: BitArray,
-  context context: List(BitArray),
+  path path: List(BitArray),
 ) -> Nil {
-  let context = case context {
-    [] -> ""
-
-    _else -> {
-      let context =
-        list.map(context, format_bits)
-        |> list.reverse
-        |> string.join("/")
-
-      ansi.grey(context) <> " "
-    }
-  }
-
   io.println("")
-  io.println(context)
 
   io.println(
-    ansi.cyan(ansi.underline(format_bits(kind))) <> " " <> format_value(data),
+    list.map(path, format_bits)
+    |> list.reverse
+    |> string.join("/")
+    |> ansi.grey,
   )
+
+  let kind = ansi.cyan(ansi.underline(format_bits(kind)))
+  io.println(kind <> " " <> format_value(data))
 }
