@@ -89,7 +89,8 @@ fn read_ilst(
       })
 
       let path = [<<"----">>, ..path]
-      read_ilst(rest, path:, results: dict.insert(results, key, value))
+      let results = dict.insert(results, key, value)
+      read_ilst(rest, path:, results:)
     }
 
     <<size:int-32, 0xa9, kind:bytes-3, payload:bytes-size(size - 8), rest:bits>> -> {
