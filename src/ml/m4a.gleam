@@ -78,23 +78,17 @@ fn read_ilst_atom(
   case data {
     <<size:int-32, "----", payload:bytes-size(size - 8), rest:bits>> -> {
       use #(key, value) <- result.try(read_freeform_atom(payload, None, None))
-
-      dict.insert(results, key, value)
-      |> read_ilst_atom(rest, _)
+      read_ilst_atom(rest, dict.insert(results, key, value))
     }
 
     <<size:int-32, 0xa9, kind:bytes-3, payload:bytes-size(size - 8), rest:bits>> -> {
       use #(value, _rest) <- result.try(read_data_atom(payload))
-
-      dict.insert(results, <<"_", kind:bits>>, value)
-      |> read_ilst_atom(rest, _)
+      read_ilst_atom(rest, dict.insert(results, <<"_", kind:bits>>, value))
     }
 
     <<size:int-32, kind:bytes-4, payload:bytes-size(size - 8), rest:bits>> -> {
       use #(value, _rest) <- result.try(read_data_atom(payload))
-
-      dict.insert(results, <<kind:bits>>, value)
-      |> read_ilst_atom(rest, _)
+      read_ilst_atom(rest, dict.insert(results, <<kind:bits>>, value))
     }
 
     _else -> Ok(results)
