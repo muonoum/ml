@@ -1,5 +1,5 @@
 import gleam/dict.{type Dict}
-import gleam/option.{type Option}
+import gleam/option.{type Option, None, Some}
 
 pub fn read(data: BitArray) {
   read_toplevel(data, dict.new())
@@ -76,7 +76,7 @@ fn read_ilst_atom(
 ) -> Result(Dict(BitArray, BitArray), String) {
   case data {
     <<size:int-32, "----", payload:bytes-size(size - 8), rest:bits>> -> {
-      let #(key, value) = read_freeform_atom(payload, option.None, option.None)
+      let #(key, value) = read_freeform_atom(payload, None, None)
 
       dict.insert(results, key, value)
       |> read_ilst_atom(rest, _)
@@ -126,7 +126,7 @@ fn read_freeform_atom(
       rest:bits,
     >> ->
       case key, value {
-        option.Some(key), option.Some(value) -> #(key, value)
+        Some(key), Some(value) -> #(key, value)
         _key, _value -> read_freeform_atom(rest, key, value)
       }
 
@@ -139,10 +139,8 @@ fn read_freeform_atom(
       rest:bits,
     >> ->
       case key, value {
-        _key, option.Some(value) -> #(payload, value)
-
-        _key, option.None ->
-          read_freeform_atom(rest, option.Some(payload), value)
+        _key, Some(value) -> #(payload, value)
+        _key, None -> read_freeform_atom(rest, Some(payload), value)
       }
 
     <<
@@ -154,10 +152,8 @@ fn read_freeform_atom(
       rest:bits,
     >> ->
       case key, value {
-        option.Some(key), _value -> #(key, payload)
-
-        option.None, _value ->
-          read_freeform_atom(rest, key, option.Some(payload))
+        Some(key), _value -> #(key, payload)
+        None, _value -> read_freeform_atom(rest, key, Some(payload))
       }
 
     _else -> panic as "freeform"
