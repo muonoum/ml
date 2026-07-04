@@ -87,8 +87,10 @@ fn read_ilst_atom(
       |> read_ilst_atom(rest, _)
     }
 
-    <<size:int-32, _kind:bytes-4, _payload:bytes-size(size - 8), rest:bits>> ->
-      read_ilst_atom(rest, results)
+    <<size:int-32, kind:bytes-4, payload:bytes-size(size - 8), rest:bits>> ->
+      read_data_atom(payload)
+      |> dict.insert(results, <<kind:bits>>, _)
+      |> read_ilst_atom(rest, _)
 
     _else -> Ok(results)
   }
