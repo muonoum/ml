@@ -1,6 +1,7 @@
 import argv
 import gleam/dict
 import gleam/io
+import gleam/string
 import ml/id3
 import ml/m4a
 import simplifile
@@ -25,8 +26,11 @@ pub fn main() -> Nil {
     }
 
     <<_size:bytes-4, "ftyp", "M4A", _rest:bits>> -> {
-      m4a.read(data)
-      Nil
+      let assert Ok(metadata) = m4a.read(data)
+
+      dict.each(metadata, fn(key, value) {
+        io.println(string.inspect(key) <> ": " <> string.inspect(value))
+      })
     }
 
     _else -> panic as "file type"

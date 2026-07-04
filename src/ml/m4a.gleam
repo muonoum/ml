@@ -1,149 +1,163 @@
-import gleam/bit_array
-import gleam/int
-import gleam/io
-import gleam/list
-import gleam/string
-import gleam_community/ansi
+import gleam/dict.{type Dict}
+import gleam/option.{type Option}
 
-pub fn read(data: BitArray) -> Result(Nil, String) {
-  read_chunk(data, path: [])
+pub fn read(data: BitArray) {
+  read_toplevel(data, dict.new())
 }
 
-// TODO: Samle opp i stedet for print
-// TODO: Splitte opp, håndtere forskjellige datatyper
-// TODO: Spesiell håndtering av '----': name=data
-
-fn read_chunk(
+fn read_toplevel(
   data: BitArray,
-  path path: List(BitArray),
-) -> Result(Nil, String) {
+  results: Dict(BitArray, BitArray),
+) -> Result(Dict(BitArray, BitArray), String) {
+  case data {
+    <<size:int-32, "moov", payload:bytes-size(size - 8), _rest:bits>> ->
+      read_moov_atom(payload, results)
+
+    <<size:int-32, _kind:bytes-4, _payload:bytes-size(size - 8), rest:bits>> ->
+      read_toplevel(rest, results)
+
+    _else -> Ok(results)
+  }
+}
+
+fn read_moov_atom(
+  data: BitArray,
+  results: Dict(BitArray, BitArray),
+) -> Result(Dict(BitArray, BitArray), String) {
+  case data {
+    <<size:int-32, "udta", payload:bytes-size(size - 8), _rest:bits>> ->
+      read_udta_atom(payload, results)
+
+    <<size:int-32, _kind:bytes-4, _payload:bytes-size(size - 8), rest:bits>> ->
+      read_moov_atom(rest, results)
+
+    _else -> Ok(results)
+  }
+}
+
+fn read_udta_atom(
+  data: BitArray,
+  results: Dict(BitArray, BitArray),
+) -> Result(Dict(BitArray, BitArray), String) {
+  case data {
+    <<
+      size:int-32,
+      "meta",
+      _padding:bytes-size(4),
+      payload:bytes-size(size - 12),
+      _rest:bits,
+    >> -> read_meta_atom(payload, results)
+
+    <<size:int-32, _kind:bytes-4, _payload:bytes-size(size - 8), rest:bits>> ->
+      read_udta_atom(rest, results)
+
+    _else -> Ok(results)
+  }
+}
+
+fn read_meta_atom(
+  data: BitArray,
+  results: Dict(BitArray, BitArray),
+) -> Result(Dict(BitArray, BitArray), String) {
+  case data {
+    <<size:int-32, "ilst", payload:bytes-size(size - 8), _rest:bits>> ->
+      read_ilst_atom(payload, results)
+
+    <<size:int-32, _kind:bytes-4, _payload:bytes-size(size - 8), rest:bits>> ->
+      read_meta_atom(rest, results)
+
+    _else -> Ok(results)
+  }
+}
+
+fn read_ilst_atom(
+  data: BitArray,
+  results: Dict(BitArray, BitArray),
+) -> Result(Dict(BitArray, BitArray), String) {
+  case data {
+    <<size:int-32, 0xa9, kind:bytes-3, payload:bytes-size(size - 8), rest:bits>> ->
+      read_data_atom(payload)
+      |> dict.insert(results, <<"_", kind:bits>>, _)
+      |> read_ilst_atom(rest, _)
+
+    <<size:int-32, "----", payload:bytes-size(size - 8), rest:bits>> -> {
+      let #(key, value) = read_freeform_atom(payload, option.None, option.None)
+
+      dict.insert(results, key, value)
+      |> read_ilst_atom(rest, _)
+    }
+
+    <<size:int-32, _kind:bytes-4, _payload:bytes-size(size - 8), rest:bits>> ->
+      read_ilst_atom(rest, results)
+
+    _else -> Ok(results)
+  }
+}
+
+fn read_data_atom(data: BitArray) -> BitArray {
   case data {
     <<
       size:int-32,
       "data",
       _type_indicator:bytes-size(4),
       _locale:bytes-size(4),
-      data:bytes-size(size - 16),
-      rest:bits,
-    >> -> {
-      let kind = <<"data">>
+      payload:bytes-size(size - 16),
+      _rest:bits,
+    >> -> payload
 
-      case path {
-        [<<"trkn">>, <<"ilst">>, <<"meta">>, <<"udta">>, <<"moov">>] ->
-          case data {
-            <<_padding:bits-16, current:int-16, total:int-16, _padding:bits-16>> -> {
-              let data = int.to_string(current) <> "/" <> int.to_string(total)
-              print(kind:, data: <<data:utf8>>, path:)
-              read_chunk(rest, path:)
-            }
+    _else -> panic as "data"
+  }
+}
 
-            _else -> Error("trkn/data")
-          }
-
-        [<<"disk">>, <<"ilst">>, <<"meta">>, <<"udta">>, <<"moov">>] ->
-          case data {
-            <<_padding:bits-16, current:int-16, total:int-16>> -> {
-              let data = int.to_string(current) <> "/" <> int.to_string(total)
-              print(kind:, data: <<data:utf8>>, path:)
-              read_chunk(rest, path:)
-            }
-
-            _else -> Error("disk/data")
-          }
-
-        _else -> {
-          print(kind:, data:, path:)
-          let _ = read_chunk(data, path: [kind, ..path])
-          read_chunk(rest, path:)
-        }
-      }
-    }
-
+fn read_freeform_atom(
+  data: BitArray,
+  key: Option(BitArray),
+  value: Option(BitArray),
+) -> #(BitArray, BitArray) {
+  case data {
     <<
       size:int-32,
       "mean",
       _version:bytes-1,
       _flags:bytes-3,
-      data:bytes-size(size - 12),
+      _payload:bytes-size(size - 12),
       rest:bits,
-    >> -> {
-      let _ = read_chunk(data, path: [<<"mean">>, ..path])
-      read_chunk(rest, path:)
-    }
+    >> ->
+      case key, value {
+        option.Some(key), option.Some(value) -> #(key, value)
+        _key, _value -> read_freeform_atom(rest, key, value)
+      }
 
     <<
       size:int-32,
       "name",
       _version:bytes-1,
       _flags:bytes-3,
-      data:bytes-size(size - 12),
+      payload:bytes-size(size - 12),
       rest:bits,
-    >> -> {
-      print(kind: <<"name">>, data:, path:)
-      let _ = read_chunk(data, path: [<<"name">>, ..path])
-      read_chunk(rest, path:)
-    }
+    >> ->
+      case key, value {
+        _key, option.Some(value) -> #(payload, value)
+
+        _key, option.None ->
+          read_freeform_atom(rest, option.Some(payload), value)
+      }
 
     <<
       size:int-32,
-      "meta",
-      _padding:bytes-size(4),
-      data:bytes-size(size - 12),
+      "data",
+      _type_indicator:bytes-size(4),
+      _locale:bytes-size(4),
+      payload:bytes-size(size - 16),
       rest:bits,
-    >> -> {
-      let _ = read_chunk(data, path: [<<"meta">>, ..path])
-      read_chunk(rest, path:)
-    }
+    >> ->
+      case key, value {
+        option.Some(key), _value -> #(key, payload)
 
-    <<size:int-32, "----", data:bytes-size(size - 8), rest:bits>> -> {
-      let _ = read_chunk(data, path: [<<"----">>, ..path])
-      read_chunk(rest, path:)
-    }
+        option.None, _value ->
+          read_freeform_atom(rest, key, option.Some(payload))
+      }
 
-    <<size:int-32, 0xa9, kind:bytes-3, data:bytes-size(size - 8), rest:bits>> -> {
-      let _ = read_chunk(data, path: [<<"_", kind:bits>>, ..path])
-      read_chunk(rest, path:)
-    }
-
-    <<size:int-32, kind:bytes-4, data:bytes-size(size - 8), rest:bits>> -> {
-      let _ = read_chunk(data, path: [kind, ..path])
-      read_chunk(rest, path:)
-    }
-
-    _else -> Ok(Nil)
+    _else -> panic as "freeform"
   }
-}
-
-fn format_bits(bits: BitArray) -> String {
-  case bit_array.to_string(bits) {
-    Ok(string) -> string
-    Error(Nil) -> string.inspect(bits)
-  }
-}
-
-fn format_value(bits: BitArray) -> String {
-  let size = bit_array.byte_size(bits)
-
-  case size < 50 {
-    False -> "[..] " <> int.to_string(size) <> " bytes"
-    True -> string.inspect(format_bits(bits))
-  }
-}
-
-fn print(
-  kind kind: BitArray,
-  data data: BitArray,
-  path path: List(BitArray),
-) -> Nil {
-  io.println("")
-
-  io.println(
-    list.map(path, format_bits)
-    |> list.reverse
-    |> string.join("/")
-    |> ansi.grey,
-  )
-
-  let kind = ansi.cyan(ansi.underline(format_bits(kind)))
-  io.println(kind <> " " <> format_value(data))
 }
