@@ -6,7 +6,7 @@ import gleam/string
 import gleam_community/ansi
 
 pub fn read(data: BitArray) -> Result(Nil, String) {
-  read_chunk(data, context: [], depth: 0)
+  read_chunk(data, context: [])
 }
 
 // TODO: Samle opp i stedet for print
@@ -16,7 +16,6 @@ pub fn read(data: BitArray) -> Result(Nil, String) {
 fn read_chunk(
   data: BitArray,
   context context: List(BitArray),
-  depth depth: Int,
 ) -> Result(Nil, String) {
   case data {
     <<
@@ -35,7 +34,7 @@ fn read_chunk(
             <<_pad:bits-16, num:int-16, tot:int-16, _pad:bits-16>> -> {
               let data = int.to_string(num) <> "/" <> int.to_string(tot)
               print(kind:, data: <<data:utf8>>, context:)
-              read_chunk(rest, depth:, context:)
+              read_chunk(rest, context:)
             }
 
             _else -> Error("trkn/data")
@@ -46,7 +45,7 @@ fn read_chunk(
             <<_pad:bits-16, num:int-16, tot:int-16>> -> {
               let data = int.to_string(num) <> "/" <> int.to_string(tot)
               print(kind:, data: <<data:utf8>>, context:)
-              read_chunk(rest, depth:, context:)
+              read_chunk(rest, context:)
             }
 
             _else -> Error("disk/data")
@@ -54,8 +53,8 @@ fn read_chunk(
 
         _else -> {
           print(kind:, data:, context:)
-          let _ = read_chunk(data, depth: depth + 1, context: [kind, ..context])
-          read_chunk(rest, depth:, context:)
+          let _ = read_chunk(data, context: [kind, ..context])
+          read_chunk(rest, context:)
         }
       }
     }
@@ -69,8 +68,8 @@ fn read_chunk(
       rest:bits,
     >> -> {
       let kind = <<"mean">>
-      let _ = read_chunk(data, depth: depth + 1, context: [kind, ..context])
-      read_chunk(rest, depth:, context:)
+      let _ = read_chunk(data, context: [kind, ..context])
+      read_chunk(rest, context:)
     }
 
     <<
@@ -83,8 +82,8 @@ fn read_chunk(
     >> -> {
       let kind = <<"name">>
       print(kind:, data:, context:)
-      let _ = read_chunk(data, depth: depth + 1, context: [kind, ..context])
-      read_chunk(rest, depth:, context:)
+      let _ = read_chunk(data, context: [kind, ..context])
+      read_chunk(rest, context:)
     }
 
     <<
@@ -95,26 +94,25 @@ fn read_chunk(
       rest:bits,
     >> -> {
       let kind = <<"meta">>
-      let _ = read_chunk(data, depth: depth + 1, context: [kind, ..context])
-      read_chunk(rest, depth:, context:)
+      let _ = read_chunk(data, context: [kind, ..context])
+      read_chunk(rest, context:)
     }
 
     <<size:int-32, "----", data:bytes-size(size - 8), rest:bits>> -> {
-      let _ =
-        read_chunk(data, depth: depth + 1, context: [<<"----">>, ..context])
+      let _ = read_chunk(data, context: [<<"----">>, ..context])
 
-      read_chunk(rest, depth:, context:)
+      read_chunk(rest, context:)
     }
 
     <<size:int-32, 0xa9, kind:bytes-3, data:bytes-size(size - 8), rest:bits>> -> {
       let kind = <<"_", kind:bits>>
-      let _ = read_chunk(data, depth: depth + 1, context: [kind, ..context])
-      read_chunk(rest, depth:, context:)
+      let _ = read_chunk(data, context: [kind, ..context])
+      read_chunk(rest, context:)
     }
 
     <<size:int-32, kind:bytes-4, data:bytes-size(size - 8), rest:bits>> -> {
-      let _ = read_chunk(data, depth: depth + 1, context: [kind, ..context])
-      read_chunk(rest, depth:, context:)
+      let _ = read_chunk(data, context: [kind, ..context])
+      read_chunk(rest, context:)
     }
 
     _else -> Ok(Nil)
