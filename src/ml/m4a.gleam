@@ -101,21 +101,6 @@ fn read_ilst_atom(
   }
 }
 
-fn read_data_atom(data: BitArray) -> Result(#(BitArray, BitArray), String) {
-  case data {
-    <<
-      size:int-32,
-      "data",
-      _type_indicator:bytes-size(4),
-      _locale:bytes-size(4),
-      payload:bytes-size(size - 16),
-      rest:bits,
-    >> -> Ok(#(payload, rest))
-
-    _else -> Error("data")
-  }
-}
-
 fn read_freeform_atom(
   data: BitArray,
   key: Option(BitArray),
@@ -152,5 +137,20 @@ fn read_freeform_atom(
         None -> read_freeform_atom(rest, key, Some(value))
       }
     }
+  }
+}
+
+fn read_data_atom(data: BitArray) -> Result(#(BitArray, BitArray), String) {
+  case data {
+    <<
+      size:int-32,
+      "data",
+      _type_indicator:bytes-size(4),
+      _locale:bytes-size(4),
+      payload:bytes-size(size - 16),
+      rest:bits,
+    >> -> Ok(#(payload, rest))
+
+    _else -> Error("data")
   }
 }
