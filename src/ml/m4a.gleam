@@ -5,7 +5,7 @@ import gleam/list
 import gleam/string
 import gleam_community/ansi
 
-pub fn read(data: BitArray) -> Nil {
+pub fn read(data: BitArray) -> Result(Nil, String) {
   read_chunk(data, context: [], depth: 0)
 }
 
@@ -17,7 +17,7 @@ fn read_chunk(
   data: BitArray,
   context context: List(BitArray),
   depth depth: Int,
-) -> Nil {
+) -> Result(Nil, String) {
   case data {
     <<
       size:int-32,
@@ -38,7 +38,7 @@ fn read_chunk(
               read_chunk(rest, depth:, context:)
             }
 
-            _else -> panic as "trkn/data"
+            _else -> Error("trkn/data")
           }
 
         [<<"disk">>, <<"ilst">>, <<"meta">>, <<"udta">>, <<"moov">>] ->
@@ -49,7 +49,7 @@ fn read_chunk(
               read_chunk(rest, depth:, context:)
             }
 
-            _else -> panic as "disk/data"
+            _else -> Error("disk/data")
           }
 
         _else -> {
@@ -99,6 +99,13 @@ fn read_chunk(
       read_chunk(rest, depth:, context:)
     }
 
+    <<size:int-32, "----", data:bytes-size(size - 8), rest:bits>> -> {
+      let _ =
+        read_chunk(data, depth: depth + 1, context: [<<"----">>, ..context])
+
+      read_chunk(rest, depth:, context:)
+    }
+
     <<size:int-32, 0xa9, kind:bytes-3, data:bytes-size(size - 8), rest:bits>> -> {
       let kind = <<"_", kind:bits>>
       let _ = read_chunk(data, depth: depth + 1, context: [kind, ..context])
@@ -110,7 +117,7 @@ fn read_chunk(
       read_chunk(rest, depth:, context:)
     }
 
-    _else -> Nil
+    _else -> Ok(Nil)
   }
 }
 
