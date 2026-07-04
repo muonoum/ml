@@ -84,14 +84,14 @@ fn read_ilst_atom(
     }
 
     <<size:int-32, 0xa9, kind:bytes-3, payload:bytes-size(size - 8), rest:bits>> -> {
-      use value <- result.try(read_data_atom(payload))
+      use #(value, _rest) <- result.try(read_data_atom(payload))
 
       dict.insert(results, <<"_", kind:bits>>, value)
       |> read_ilst_atom(rest, _)
     }
 
     <<size:int-32, kind:bytes-4, payload:bytes-size(size - 8), rest:bits>> -> {
-      use value <- result.try(read_data_atom(payload))
+      use #(value, _rest) <- result.try(read_data_atom(payload))
 
       dict.insert(results, <<kind:bits>>, value)
       |> read_ilst_atom(rest, _)
@@ -101,7 +101,7 @@ fn read_ilst_atom(
   }
 }
 
-fn read_data_atom(data: BitArray) -> Result(BitArray, String) {
+fn read_data_atom(data: BitArray) -> Result(#(BitArray, BitArray), String) {
   case data {
     <<
       size:int-32,
@@ -109,8 +109,8 @@ fn read_data_atom(data: BitArray) -> Result(BitArray, String) {
       _type_indicator:bytes-size(4),
       _locale:bytes-size(4),
       payload:bytes-size(size - 16),
-      _rest:bits,
-    >> -> Ok(payload)
+      rest:bits,
+    >> -> Ok(#(payload, rest))
 
     _else -> Error("data")
   }
@@ -129,11 +129,7 @@ fn read_freeform_atom(
       _flags:bytes-3,
       _payload:bytes-size(size - 12),
       rest:bits,
-    >> ->
-      case key, value {
-        Some(key), Some(value) -> Ok(#(key, value))
-        _key, _value -> read_freeform_atom(rest, key, value)
-      }
+    >> -> read_freeform_atom(rest, key, value)
 
     <<
       size:int-32,
@@ -143,24 +139,18 @@ fn read_freeform_atom(
       payload:bytes-size(size - 12),
       rest:bits,
     >> ->
-      case key, value {
-        _key, Some(value) -> Ok(#(payload, value))
-        _key, None -> read_freeform_atom(rest, Some(payload), value)
+      case value {
+        Some(value) -> Ok(#(payload, value))
+        None -> read_freeform_atom(rest, Some(payload), value)
       }
 
-    <<
-      size:int-32,
-      "data",
-      _type_indicator:bytes-size(4),
-      _locale:bytes-size(4),
-      payload:bytes-size(size - 16),
-      rest:bits,
-    >> ->
-      case key, value {
-        Some(key), _value -> Ok(#(key, payload))
-        None, _value -> read_freeform_atom(rest, key, Some(payload))
-      }
+    _else -> {
+      use #(value, rest) <- result.try(read_data_atom(data))
 
-    _else -> Error("freeform")
+      case key {
+        Some(key) -> Ok(#(key, value))
+        None -> read_freeform_atom(rest, key, Some(value))
+      }
+    }
   }
 }
