@@ -31,8 +31,8 @@ fn read_chunk(
       case context {
         [<<"trkn">>, <<"ilst">>, <<"meta">>, <<"udta">>, <<"moov">>] ->
           case data {
-            <<_pad:bits-16, num:int-16, tot:int-16, _pad:bits-16>> -> {
-              let data = int.to_string(num) <> "/" <> int.to_string(tot)
+            <<_padding:bits-16, current:int-16, total:int-16, _padding:bits-16>> -> {
+              let data = int.to_string(current) <> "/" <> int.to_string(total)
               print(kind:, data: <<data:utf8>>, context:)
               read_chunk(rest, context:)
             }
@@ -42,8 +42,8 @@ fn read_chunk(
 
         [<<"disk">>, <<"ilst">>, <<"meta">>, <<"udta">>, <<"moov">>] ->
           case data {
-            <<_pad:bits-16, num:int-16, tot:int-16>> -> {
-              let data = int.to_string(num) <> "/" <> int.to_string(tot)
+            <<_padding:bits-16, current:int-16, total:int-16>> -> {
+              let data = int.to_string(current) <> "/" <> int.to_string(total)
               print(kind:, data: <<data:utf8>>, context:)
               read_chunk(rest, context:)
             }
@@ -67,8 +67,7 @@ fn read_chunk(
       data:bytes-size(size - 12),
       rest:bits,
     >> -> {
-      let kind = <<"mean">>
-      let _ = read_chunk(data, context: [kind, ..context])
+      let _ = read_chunk(data, context: [<<"mean">>, ..context])
       read_chunk(rest, context:)
     }
 
@@ -80,9 +79,8 @@ fn read_chunk(
       data:bytes-size(size - 12),
       rest:bits,
     >> -> {
-      let kind = <<"name">>
-      print(kind:, data:, context:)
-      let _ = read_chunk(data, context: [kind, ..context])
+      print(kind: <<"name">>, data:, context:)
+      let _ = read_chunk(data, context: [<<"name">>, ..context])
       read_chunk(rest, context:)
     }
 
@@ -93,20 +91,17 @@ fn read_chunk(
       data:bytes-size(size - 12),
       rest:bits,
     >> -> {
-      let kind = <<"meta">>
-      let _ = read_chunk(data, context: [kind, ..context])
+      let _ = read_chunk(data, context: [<<"meta">>, ..context])
       read_chunk(rest, context:)
     }
 
     <<size:int-32, "----", data:bytes-size(size - 8), rest:bits>> -> {
       let _ = read_chunk(data, context: [<<"----">>, ..context])
-
       read_chunk(rest, context:)
     }
 
     <<size:int-32, 0xa9, kind:bytes-3, data:bytes-size(size - 8), rest:bits>> -> {
-      let kind = <<"_", kind:bits>>
-      let _ = read_chunk(data, context: [kind, ..context])
+      let _ = read_chunk(data, context: [<<"_", kind:bits>>, ..context])
       read_chunk(rest, context:)
     }
 
