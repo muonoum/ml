@@ -85,10 +85,10 @@ fn read_ilst(
   case data {
     <<size:int-32, "----", payload:bytes-size(size - 8), rest:bits>> -> {
       use #(key, value) <- result.try({
+        let path = [<<"----">>, ..path]
         read_freeform(payload, path:, key: None, value: None)
       })
 
-      let path = [<<"----">>, ..path]
       let results = dict.insert(results, key, value)
       read_ilst(rest, path:, results:)
     }
