@@ -12,7 +12,7 @@ fn read_toplevel(
 ) -> Result(Dict(BitArray, BitArray), String) {
   case data {
     <<size:int-32, "moov", payload:bytes-size(size - 8), _rest:bits>> ->
-      read_moov_atom(payload, results)
+      read_moov(payload, results)
 
     <<size:int-32, _kind:bytes-4, _payload:bytes-size(size - 8), rest:bits>> ->
       read_toplevel(rest, results)
@@ -21,22 +21,22 @@ fn read_toplevel(
   }
 }
 
-fn read_moov_atom(
+fn read_moov(
   data: BitArray,
   results: Dict(BitArray, BitArray),
 ) -> Result(Dict(BitArray, BitArray), String) {
   case data {
     <<size:int-32, "udta", payload:bytes-size(size - 8), _rest:bits>> ->
-      read_udta_atom(payload, results)
+      read_udta(payload, results)
 
     <<size:int-32, _kind:bytes-4, _payload:bytes-size(size - 8), rest:bits>> ->
-      read_moov_atom(rest, results)
+      read_moov(rest, results)
 
     _else -> Ok(results)
   }
 }
 
-fn read_udta_atom(
+fn read_udta(
   data: BitArray,
   results: Dict(BitArray, BitArray),
 ) -> Result(Dict(BitArray, BitArray), String) {
@@ -47,55 +47,55 @@ fn read_udta_atom(
       _padding:bytes-size(4),
       payload:bytes-size(size - 12),
       _rest:bits,
-    >> -> read_meta_atom(payload, results)
+    >> -> read_meta(payload, results)
 
     <<size:int-32, _kind:bytes-4, _payload:bytes-size(size - 8), rest:bits>> ->
-      read_udta_atom(rest, results)
+      read_udta(rest, results)
 
     _else -> Ok(results)
   }
 }
 
-fn read_meta_atom(
+fn read_meta(
   data: BitArray,
   results: Dict(BitArray, BitArray),
 ) -> Result(Dict(BitArray, BitArray), String) {
   case data {
     <<size:int-32, "ilst", payload:bytes-size(size - 8), _rest:bits>> ->
-      read_ilst_atom(payload, results)
+      read_ilst(payload, results)
 
     <<size:int-32, _kind:bytes-4, _payload:bytes-size(size - 8), rest:bits>> ->
-      read_meta_atom(rest, results)
+      read_meta(rest, results)
 
     _else -> Ok(results)
   }
 }
 
-fn read_ilst_atom(
+fn read_ilst(
   data: BitArray,
   results: Dict(BitArray, BitArray),
 ) -> Result(Dict(BitArray, BitArray), String) {
   case data {
     <<size:int-32, "----", payload:bytes-size(size - 8), rest:bits>> -> {
-      use #(key, value) <- result.try(read_freeform_atom(payload, None, None))
-      read_ilst_atom(rest, dict.insert(results, key, value))
+      use #(key, value) <- result.try(read_freeform(payload, None, None))
+      read_ilst(rest, dict.insert(results, key, value))
     }
 
     <<size:int-32, 0xa9, kind:bytes-3, payload:bytes-size(size - 8), rest:bits>> -> {
-      use #(value, _rest) <- result.try(read_data_atom(payload))
-      read_ilst_atom(rest, dict.insert(results, <<"_", kind:bits>>, value))
+      use #(value, _rest) <- result.try(read_data(payload))
+      read_ilst(rest, dict.insert(results, <<"_", kind:bits>>, value))
     }
 
     <<size:int-32, kind:bytes-4, payload:bytes-size(size - 8), rest:bits>> -> {
-      use #(value, _rest) <- result.try(read_data_atom(payload))
-      read_ilst_atom(rest, dict.insert(results, <<kind:bits>>, value))
+      use #(value, _rest) <- result.try(read_data(payload))
+      read_ilst(rest, dict.insert(results, <<kind:bits>>, value))
     }
 
     _else -> Ok(results)
   }
 }
 
-fn read_freeform_atom(
+fn read_freeform(
   data: BitArray,
   key: Option(BitArray),
   value: Option(BitArray),
@@ -108,7 +108,7 @@ fn read_freeform_atom(
       _flags:bytes-3,
       _payload:bytes-size(size - 12),
       rest:bits,
-    >> -> read_freeform_atom(rest, key, value)
+    >> -> read_freeform(rest, key, value)
 
     <<
       size:int-32,
@@ -120,21 +120,21 @@ fn read_freeform_atom(
     >> ->
       case value {
         Some(value) -> Ok(#(payload, value))
-        None -> read_freeform_atom(rest, Some(payload), value)
+        None -> read_freeform(rest, Some(payload), value)
       }
 
     _else -> {
-      use #(value, rest) <- result.try(read_data_atom(data))
+      use #(value, rest) <- result.try(read_data(data))
 
       case key {
         Some(key) -> Ok(#(key, value))
-        None -> read_freeform_atom(rest, key, Some(value))
+        None -> read_freeform(rest, key, Some(value))
       }
     }
   }
 }
 
-fn read_data_atom(data: BitArray) -> Result(#(BitArray, BitArray), String) {
+fn read_data(data: BitArray) -> Result(#(BitArray, BitArray), String) {
   case data {
     <<
       size:int-32,
