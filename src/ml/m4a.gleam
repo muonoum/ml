@@ -1,7 +1,8 @@
 import gleam/dict.{type Dict}
 import gleam/option.{type Option, None, Some}
+import gleam/result
 
-pub fn read(data: BitArray) {
+pub fn read(data: BitArray) -> Result(Dict(BitArray, BitArray), String) {
   read_toplevel(data, dict.new())
 }
 
@@ -76,27 +77,31 @@ fn read_ilst_atom(
 ) -> Result(Dict(BitArray, BitArray), String) {
   case data {
     <<size:int-32, "----", payload:bytes-size(size - 8), rest:bits>> -> {
-      let #(key, value) = read_freeform_atom(payload, None, None)
+      use #(key, value) <- result.try(read_freeform_atom(payload, None, None))
 
       dict.insert(results, key, value)
       |> read_ilst_atom(rest, _)
     }
 
-    <<size:int-32, 0xa9, kind:bytes-3, payload:bytes-size(size - 8), rest:bits>> ->
-      read_data_atom(payload)
-      |> dict.insert(results, <<"_", kind:bits>>, _)
-      |> read_ilst_atom(rest, _)
+    <<size:int-32, 0xa9, kind:bytes-3, payload:bytes-size(size - 8), rest:bits>> -> {
+      use value <- result.try(read_data_atom(payload))
 
-    <<size:int-32, kind:bytes-4, payload:bytes-size(size - 8), rest:bits>> ->
-      read_data_atom(payload)
-      |> dict.insert(results, <<kind:bits>>, _)
+      dict.insert(results, <<"_", kind:bits>>, value)
       |> read_ilst_atom(rest, _)
+    }
+
+    <<size:int-32, kind:bytes-4, payload:bytes-size(size - 8), rest:bits>> -> {
+      use value <- result.try(read_data_atom(payload))
+
+      dict.insert(results, <<kind:bits>>, value)
+      |> read_ilst_atom(rest, _)
+    }
 
     _else -> Ok(results)
   }
 }
 
-fn read_data_atom(data: BitArray) -> BitArray {
+fn read_data_atom(data: BitArray) -> Result(BitArray, String) {
   case data {
     <<
       size:int-32,
@@ -105,9 +110,9 @@ fn read_data_atom(data: BitArray) -> BitArray {
       _locale:bytes-size(4),
       payload:bytes-size(size - 16),
       _rest:bits,
-    >> -> payload
+    >> -> Ok(payload)
 
-    _else -> panic as "data"
+    _else -> Error("data")
   }
 }
 
@@ -115,7 +120,7 @@ fn read_freeform_atom(
   data: BitArray,
   key: Option(BitArray),
   value: Option(BitArray),
-) -> #(BitArray, BitArray) {
+) -> Result(#(BitArray, BitArray), String) {
   case data {
     <<
       size:int-32,
@@ -126,7 +131,7 @@ fn read_freeform_atom(
       rest:bits,
     >> ->
       case key, value {
-        Some(key), Some(value) -> #(key, value)
+        Some(key), Some(value) -> Ok(#(key, value))
         _key, _value -> read_freeform_atom(rest, key, value)
       }
 
@@ -139,7 +144,7 @@ fn read_freeform_atom(
       rest:bits,
     >> ->
       case key, value {
-        _key, Some(value) -> #(payload, value)
+        _key, Some(value) -> Ok(#(payload, value))
         _key, None -> read_freeform_atom(rest, Some(payload), value)
       }
 
@@ -152,10 +157,10 @@ fn read_freeform_atom(
       rest:bits,
     >> ->
       case key, value {
-        Some(key), _value -> #(key, payload)
+        Some(key), _value -> Ok(#(key, payload))
         None, _value -> read_freeform_atom(rest, key, Some(payload))
       }
 
-    _else -> panic as "freeform"
+    _else -> Error("freeform")
   }
 }
