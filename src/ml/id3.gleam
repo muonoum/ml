@@ -92,6 +92,7 @@ fn read_synchsafe(data: BitArray) -> Result(Int, Nil) {
   }
 }
 
+@internal
 pub fn read_zero(data: BitArray, index: Int) -> BitArray {
   case data {
     <<v:bytes-size(index), 0, _:bytes>> -> v
