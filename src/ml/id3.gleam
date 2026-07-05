@@ -92,10 +92,10 @@ fn read_synchsafe(data: BitArray) -> Result(Int, Nil) {
   }
 }
 
-fn read_zero(data: BitArray, index: Int) -> BitArray {
+pub fn read_zero(data: BitArray, index: Int) -> BitArray {
   case data {
     <<v:bytes-size(index), 0, _:bytes>> -> v
-    <<_:bytes-size(index), _:bytes>> as v -> read_zero(v, index + 1)
-    v -> v
+    <<v:bytes-size(index)>> -> v
+    v -> read_zero(v, index + 1)
   }
 }
