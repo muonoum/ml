@@ -13,6 +13,9 @@ pub fn zero_test() {
   id3.read_zero(<<"":utf8>>)
   |> should.equal(<<"":utf8>>)
 
+  id3.read_zero(<<"":utf8, 0>>)
+  |> should.equal(<<"":utf8>>)
+
   id3.read_zero(<<>>)
   |> should.equal(<<>>)
 
