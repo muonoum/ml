@@ -69,7 +69,7 @@ fn read_text_frame(payload: BitArray) -> Result(Frame, Nil) {
   case payload {
     // ISO-8859-1 | UTF-8
     <<0:8, rest:bits>> | <<3:8, rest:bits>> ->
-      bit_array.to_string(read_zero(rest, 0))
+      bit_array.to_string(read_zero(rest))
       |> result.map(String)
 
     // UTF-16
@@ -93,10 +93,14 @@ fn read_synchsafe(data: BitArray) -> Result(Int, Nil) {
 }
 
 @internal
-pub fn read_zero(data: BitArray, index: Int) -> BitArray {
+pub fn read_zero(data: BitArray) -> BitArray {
+  read_zero_loop(data, 0)
+}
+
+fn read_zero_loop(data: BitArray, index: Int) -> BitArray {
   case data {
     <<v:bytes-size(index), 0, _:bytes>> -> v
     <<v:bytes-size(index)>> -> v
-    v -> read_zero(v, index + 1)
+    v -> read_zero_loop(v, index + 1)
   }
 }
