@@ -18,7 +18,7 @@ pub fn main() -> Nil {
 
       dict.each(tag.frames, fn(key, frame) {
         let value = case frame {
-          id3.String(text) -> text
+          id3.String(text) -> string.inspect(text)
           id3.Bits(_) -> ".."
           id3.Other -> "--"
         }

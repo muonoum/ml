@@ -2,7 +2,6 @@ import gleam/bit_array
 import gleam/dict.{type Dict}
 import gleam/int
 import gleam/result
-import gleam/string
 
 pub type Tag {
   Tag(frames: Dict(String, Frame))
@@ -68,22 +67,15 @@ fn read_frame(
 
 fn read_text_frame(payload: BitArray) -> Result(Frame, Nil) {
   case payload {
-    // ISO-8859-1
-    <<0:8, rest:bits>> ->
-      bit_array.to_string(rest)
-      // TODO
-      |> result.map(string.drop_end(_, 1))
+    // ISO-8859-1 | UTF-8
+    <<0:8, rest:bits>> | <<3:8, rest:bits>> ->
+      bit_array.to_string(read_zero(rest, 0))
       |> result.map(String)
 
-    // UTF-8
-    <<3:8, rest:bits>> ->
-      bit_array.to_string(rest)
-      |> result.map(string.drop_end(_, 1))
-      |> result.map(String)
-
-    // <<1:8, 0xff, 0xfe, rest:bits>> -> echo #(key, "UTF-16 FFFE", rest)
-    // <<1:8, 0xfe, 0xff, rest:bits>> -> echo #(key, "UTF-16 FEFF", rest)
-    // <<2:8, rest:bits>> -> echo #(key, "UTF-16", rest)
+    // UTF-16
+    // <<1:8, 0xff, 0xfe, rest:bits>> -> todo
+    // <<1:8, 0xfe, 0xff, rest:bits>> -> todo
+    // <<2:8, rest:bits>> -> todo
     _else -> panic as "encoding"
   }
 }
@@ -97,5 +89,13 @@ fn read_synchsafe(data: BitArray) -> Result(Int, Nil) {
       }
 
     _else -> Error(Nil)
+  }
+}
+
+fn read_zero(data: BitArray, index: Int) -> BitArray {
+  case data {
+    <<v:bytes-size(index), 0, _:bytes>> -> v
+    <<_:bytes-size(index), _:bytes>> as v -> read_zero(v, index + 1)
+    v -> v
   }
 }
