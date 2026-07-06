@@ -1,19 +1,8 @@
-import gleam/bit_array
-import gleam/dict.{type Dict}
 import gleam/int
 import gleam/result
+import ml/tag.{type Tag}
 
-pub type Tag {
-  Tag(frames: Dict(String, Frame))
-}
-
-pub type Frame {
-  String(String)
-  Bits(BitArray)
-  Other
-}
-
-pub fn read(data: BitArray) -> Result(Tag, Nil) {
+pub fn read(data: BitArray) -> Result(List(Tag), Nil) {
   case data {
     <<"ID3", 4:int, 0:int, flags:int-8, size:bytes-4, rest:bytes>> -> {
       assert int.bitwise_and(flags, 0b10000000) == 0 as "unsynchronisation"
@@ -21,11 +10,7 @@ pub fn read(data: BitArray) -> Result(Tag, Nil) {
       let assert Ok(size) = read_synchsafe(size)
 
       case rest {
-        <<frames:bytes-size(size), _rest:bytes>> -> {
-          let assert Ok(frames) = read_frame(frames, dict.new())
-          Ok(Tag(frames:))
-        }
-
+        <<frames:bytes-size(size), _rest:bytes>> -> read_frame(frames, [])
         _else -> panic as "frames"
       }
     }
@@ -34,27 +19,32 @@ pub fn read(data: BitArray) -> Result(Tag, Nil) {
   }
 }
 
-fn read_frame(
-  data: BitArray,
-  frames: Dict(String, Frame),
-) -> Result(Dict(String, Frame), Nil) {
+fn read_frame(data: BitArray, tags: List(Tag)) -> Result(List(Tag), Nil) {
   case data {
-    <<0, _rest:bits>> -> Ok(frames)
+    <<0, _rest:bits>> -> Ok(tags)
 
     <<key:bytes-4, size:bytes-4, _flags:bytes-2, rest:bits>> -> {
-      use key <- result.try(bit_array.to_string(key))
       use size <- result.try(read_synchsafe(size))
 
       case rest {
         <<payload:bytes-size(size), rest:bits>> ->
-          case key {
-            "T" <> _ -> {
-              use frame <- result.try(read_text_frame(payload))
-              read_frame(rest, dict.insert(frames, key, frame))
-            }
+          // TODO: <<"T",_>
+          //       <<0:8,          _>> ISO-8859-1
+          //       <<1:8,0xff,0xfe,_>> UTF-16
+          //       <<1:8,0xfe,0xff,_>> UTF-16
+          //       <<2:8,          _>> UTF-16
+          //       <<3:8,          _>> UTF-8
 
-            "APIC" -> read_frame(rest, dict.insert(frames, key, Bits(payload)))
-            _else -> read_frame(rest, dict.insert(frames, key, Other))
+          case key {
+            <<"APIC">> ->
+              [tag.Bits(key:, value: payload), ..tags]
+              |> read_frame(rest, _)
+
+            _else ->
+              read_frame(rest, [
+                tag.Parts(key:, values: tag.split_zero(payload)),
+                ..tags
+              ])
           }
 
         _else -> panic as "frame"
@@ -62,21 +52,6 @@ fn read_frame(
     }
 
     _ -> panic as "frame"
-  }
-}
-
-fn read_text_frame(payload: BitArray) -> Result(Frame, Nil) {
-  case payload {
-    // ISO-8859-1 | UTF-8
-    <<0:8, rest:bits>> | <<3:8, rest:bits>> ->
-      bit_array.to_string(read_zero(rest))
-      |> result.map(String)
-
-    // UTF-16
-    // <<1:8, 0xff, 0xfe, rest:bits>> -> todo
-    // <<1:8, 0xfe, 0xff, rest:bits>> -> todo
-    // <<2:8, rest:bits>> -> todo
-    _else -> panic as "encoding"
   }
 }
 
@@ -89,18 +64,5 @@ fn read_synchsafe(data: BitArray) -> Result(Int, Nil) {
       }
 
     _else -> Error(Nil)
-  }
-}
-
-@internal
-pub fn read_zero(data: BitArray) -> BitArray {
-  read_zero_loop(data, 0)
-}
-
-fn read_zero_loop(data: BitArray, index: Int) -> BitArray {
-  case data {
-    <<v:bytes-size(index), 0, _:bytes>> -> v
-    <<v:bytes-size(index)>> -> v
-    v -> read_zero_loop(v, index + 1)
   }
 }

@@ -1,53 +1,55 @@
 import argv
 import gleam/bit_array
-import gleam/dict
 import gleam/int
 import gleam/io
+import gleam/list
 import gleam/string
 import ml/id3
 import ml/m4a
+import ml/tag
 import simplifile
 
 pub fn main() -> Nil {
   let assert [path] = argv.load().arguments
   let assert Ok(data) = simplifile.read_bits(path)
 
-  case data {
+  let tags = case data {
     <<"ID3", _rest:bits>> -> {
-      let assert Ok(tag) = id3.read(data)
-
-      dict.each(tag.frames, fn(key, frame) {
-        let value = case frame {
-          id3.String(text) -> string.inspect(text)
-          id3.Bits(_) -> ".."
-          id3.Other -> "--"
-        }
-
-        io.println(key <> ": " <> value)
-      })
+      let assert Ok(tags) = id3.read(data)
+      tags
     }
 
     <<_size:bytes-4, "ftyp", "M4A", _rest:bits>> -> {
-      let assert Ok(metadata) = m4a.read(data)
-
-      dict.each(metadata, fn(key, value) {
-        let size = bit_array.byte_size(value)
-
-        case size > 50 {
-          False ->
-            io.println(string.inspect(key) <> ": " <> string.inspect(value))
-
-          True ->
-            io.println(
-              string.inspect(key)
-              <> ": [..] "
-              <> int.to_string(size)
-              <> " bytes",
-            )
-        }
-      })
+      let assert Ok(tags) = m4a.read(data)
+      tags
     }
 
     _else -> panic as "file type"
+  }
+
+  use tag <- list.each(tags)
+
+  case tag {
+    tag.Bits(key:, value:) ->
+      io.println(
+        string.inspect(key) <> ": " <> string.inspect(truncate(value, 50)),
+      )
+
+    tag.Parts(key:, values:) -> {
+      io.println(
+        string.inspect(key)
+        <> ": "
+        <> string.inspect(list.map(values, truncate(_, 50))),
+      )
+    }
+  }
+}
+
+fn truncate(data: BitArray, limit: Int) -> BitArray {
+  case bit_array.byte_size(data) {
+    size if size > limit ->
+      bit_array.from_string("[..] (" <> int.to_string(size) <> " bytes)")
+
+    _else -> data
   }
 }

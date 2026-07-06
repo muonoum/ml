@@ -1,36 +1,25 @@
-import gleeunit
-import gleeunit/should
-import ml/id3
+import ml/tag
+import unitest
 
 pub fn main() -> Nil {
-  gleeunit.main()
+  unitest.main()
+}
+
+pub fn empty_zero_test() {
+  assert tag.split_zero(<<"":utf8>>) == []
+  assert tag.split_zero(<<"":utf8, 0>>) == []
+  assert tag.split_zero(<<"":utf8, 0, "":utf8>>) == []
+  assert tag.split_zero(<<>>) == []
 }
 
 pub fn zero_test() {
-  id3.read_zero(<<"a":utf8>>)
-  |> should.equal(<<"a":utf8>>)
-
-  id3.read_zero(<<"":utf8>>)
-  |> should.equal(<<"":utf8>>)
-
-  id3.read_zero(<<"":utf8, 0>>)
-  |> should.equal(<<"":utf8>>)
-
-  id3.read_zero(<<>>)
-  |> should.equal(<<>>)
-
-  id3.read_zero(<<"a":utf8, "b":utf8>>)
-  |> should.equal(<<"a":utf8, "b":utf8>>)
-
-  id3.read_zero(<<"a":utf8, "b":utf8, 0>>)
-  |> should.equal(<<"a":utf8, "b":utf8>>)
-
-  id3.read_zero(<<"a":utf8, "b":utf8, 0, "c":utf8>>)
-  |> should.equal(<<"a":utf8, "b":utf8>>)
-
-  id3.read_zero(<<"a":utf8, 0, "b":utf8>>)
-  |> should.equal(<<"a":utf8>>)
-
-  id3.read_zero(<<"a":utf8, 0>>)
-  |> should.equal(<<"a":utf8>>)
+  assert tag.split_zero(<<0, "a":utf8>>) == [<<"a":utf8>>]
+  assert tag.split_zero(<<"a":utf8>>) == [<<"a":utf8>>]
+  assert tag.split_zero(<<"a":utf8, "b":utf8>>) == [<<"a":utf8, "b":utf8>>]
+  assert tag.split_zero(<<"a":utf8, "b":utf8, 0>>) == [<<"a":utf8, "b":utf8>>]
+  assert tag.split_zero(<<"a":utf8, "b":utf8, 0, "c":utf8>>)
+    == [<<"a":utf8, "b":utf8>>, <<"c":utf8>>]
+  assert tag.split_zero(<<"a":utf8, 0, "b":utf8>>)
+    == [<<"a":utf8>>, <<"b":utf8>>]
+  assert tag.split_zero(<<"a":utf8, 0>>) == [<<"a":utf8>>]
 }
