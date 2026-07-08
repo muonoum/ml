@@ -66,7 +66,7 @@ fn read_frame(data: BitArray, tags: List(Tag)) -> Result(List(Tag), Nil) {
       }
     }
 
-    _ -> Error(Nil)
+    _else -> Error(Nil)
   }
 }
 
