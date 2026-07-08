@@ -42,7 +42,7 @@ fn read_frame(data: BitArray, tags: List(Tag)) -> Result(List(Tag), Nil) {
           case key {
             <<"T", key:bytes-3>> -> {
               use values <- result.try({
-                let #(decoder, data) = read_text_frame(payload)
+                use #(decoder, data) <- result.try(read_text_frame(payload))
                 use part <- list.try_map(tag.split_zero(data))
                 decoder(part)
               })
@@ -62,24 +62,24 @@ fn read_frame(data: BitArray, tags: List(Tag)) -> Result(List(Tag), Nil) {
             }
           }
 
-        _else -> panic as "frame"
+        _else -> Error(Nil)
       }
     }
 
-    _ -> panic as "frame"
+    _ -> Error(Nil)
   }
 }
 
 fn read_text_frame(
   data: BitArray,
-) -> #(fn(BitArray) -> Result(String, Nil), BitArray) {
+) -> Result(#(fn(BitArray) -> Result(String, Nil), BitArray), Nil) {
   case data {
-    <<0:8, data:bits>> -> #(iso_8859_1_to_string, data)
-    <<1:8, 0xff, 0xfe, data:bits>> -> #(utf16_little_to_string, data)
-    <<1:8, 0xfe, 0xff, data:bits>> -> #(utf16_big_to_string, data)
-    <<2:8, data:bits>> -> #(utf16_big_to_string, data)
-    <<3:8, data:bits>> -> #(bit_array.to_string, data)
-    _else -> panic
+    <<0:8, data:bits>> -> Ok(#(iso_8859_1_to_string, data))
+    <<1:8, 0xff, 0xfe, data:bits>> -> Ok(#(utf16_little_to_string, data))
+    <<1:8, 0xfe, 0xff, data:bits>> -> Ok(#(utf16_big_to_string, data))
+    <<2:8, data:bits>> -> Ok(#(utf16_big_to_string, data))
+    <<3:8, data:bits>> -> Ok(#(bit_array.to_string, data))
+    _else -> Error(Nil)
   }
 }
 
