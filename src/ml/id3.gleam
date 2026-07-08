@@ -1,6 +1,17 @@
+import gleam/bit_array
 import gleam/int
+import gleam/list
 import gleam/result
 import ml/tag.{type Tag}
+
+@external(erlang, "ml_glue", "utf16_little_to_string")
+fn utf16_little_to_string(data: BitArray) -> Result(String, Nil)
+
+@external(erlang, "ml_glue", "utf16_big_to_string")
+fn utf16_big_to_string(data: BitArray) -> Result(String, Nil)
+
+@external(erlang, "ml_glue", "iso_8859_1_to_string")
+fn iso_8859_1_to_string(data: BitArray) -> Result(String, Nil)
 
 pub fn read(data: BitArray) -> Result(List(Tag), Nil) {
   case data {
@@ -28,23 +39,27 @@ fn read_frame(data: BitArray, tags: List(Tag)) -> Result(List(Tag), Nil) {
 
       case rest {
         <<payload:bytes-size(size), rest:bits>> ->
-          // TODO: <<"T",_>
-          //       <<0:8,          _>> ISO-8859-1
-          //       <<1:8,0xff,0xfe,_>> UTF-16
-          //       <<1:8,0xfe,0xff,_>> UTF-16
-          //       <<2:8,          _>> UTF-16
-          //       <<3:8,          _>> UTF-8
-
           case key {
-            <<"APIC">> ->
-              [tag.Bits(key:, value: payload), ..tags]
-              |> read_frame(rest, _)
+            <<"T", key:bytes-3>> -> {
+              use values <- result.try({
+                let #(decoder, data) = read_text_frame(payload)
+                use part <- list.try_map(tag.split_zero(data))
+                decoder(part)
+              })
 
-            _else ->
-              read_frame(rest, [
-                tag.Parts(key:, values: tag.split_zero(payload)),
-                ..tags
-              ])
+              let tag = tag.Strings(key: <<"T", key:bits>>, values:)
+              read_frame(rest, [tag, ..tags])
+            }
+
+            <<"APIC">> -> {
+              let tag = tag.Bits(key:, value: payload)
+              read_frame(rest, [tag, ..tags])
+            }
+
+            _else -> {
+              let tag = tag.Parts(key:, values: tag.split_zero(payload))
+              read_frame(rest, [tag, ..tags])
+            }
           }
 
         _else -> panic as "frame"
@@ -52,6 +67,19 @@ fn read_frame(data: BitArray, tags: List(Tag)) -> Result(List(Tag), Nil) {
     }
 
     _ -> panic as "frame"
+  }
+}
+
+fn read_text_frame(
+  data: BitArray,
+) -> #(fn(BitArray) -> Result(String, Nil), BitArray) {
+  case data {
+    <<0:8, data:bits>> -> #(iso_8859_1_to_string, data)
+    <<1:8, 0xff, 0xfe, data:bits>> -> #(utf16_little_to_string, data)
+    <<1:8, 0xfe, 0xff, data:bits>> -> #(utf16_big_to_string, data)
+    <<2:8, data:bits>> -> #(utf16_big_to_string, data)
+    <<3:8, data:bits>> -> #(bit_array.to_string, data)
+    _else -> panic
   }
 }
 

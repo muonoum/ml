@@ -30,18 +30,20 @@ pub fn main() -> Nil {
   use tag <- list.each(tags)
 
   case tag {
+    tag.Strings(key:, values:) ->
+      io.println(string.inspect(key) <> ": " <> string.inspect(values))
+
     tag.Bits(key:, value:) ->
       io.println(
         string.inspect(key) <> ": " <> string.inspect(truncate(value, 50)),
       )
 
-    tag.Parts(key:, values:) -> {
+    tag.Parts(key:, values:) ->
       io.println(
         string.inspect(key)
         <> ": "
         <> string.inspect(list.map(values, truncate(_, 50))),
       )
-    }
   }
 }
 

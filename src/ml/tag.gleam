@@ -2,6 +2,7 @@ import gleam/list
 
 pub type Tag {
   Parts(key: BitArray, values: List(BitArray))
+  Strings(key: BitArray, values: List(String))
   Bits(key: BitArray, value: BitArray)
 }
 
