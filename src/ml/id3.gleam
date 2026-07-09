@@ -47,27 +47,27 @@ fn read_frames(data: BitArray, tags: List(Tag)) -> Result(List(Tag), Nil) {
 
 fn read_frame(key: BitArray, data: BitArray) -> Result(Tag, Nil) {
   case key {
-    <<"T", key:bytes-3>> -> read_text_frame(<<"T", key:bits>>, data)
+    <<"T", key:bytes-3>> -> {
+      use values <- result.try(read_text_frame(data))
+      Ok(tag.Strings(key: <<"T", key:bits>>, values:))
+    }
+
     <<"APIC">> -> Ok(tag.Bits(key:, value: data))
     _else -> Ok(tag.Parts(key:, values: tag.split_zero(data)))
   }
 }
 
-fn read_text_frame(key: BitArray, data: BitArray) -> Result(Tag, Nil) {
+fn read_text_frame(data: BitArray) -> Result(List(String), Nil) {
   case data {
     <<0:8, data:bits>> ->
-      tag.split_zero(data)
-      |> list.try_map(iso_8859_1_to_string)
-      |> result.map(tag.Strings(key:, values: _))
+      list.try_map(tag.split_zero(data), iso_8859_1_to_string)
 
     <<1:8, 0xff, 0xfe, _data:bits>>
     | <<1:8, 0xfe, 0xff, _data:bits>>
     | <<2:8, _data:bits>> -> panic as "utf-16"
 
     <<3:8, data:bits>> ->
-      tag.split_zero(data)
-      |> list.try_map(bit_array.to_string)
-      |> result.map(tag.Strings(key:, values: _))
+      list.try_map(tag.split_zero(data), bit_array.to_string)
 
     _else -> panic as "encoding"
   }
