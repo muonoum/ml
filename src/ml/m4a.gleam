@@ -82,26 +82,24 @@ fn read_ilst(
 ) -> Result(List(Tag), List(BitArray)) {
   case data {
     <<size:int-32, "----", payload:bytes-size(size - 8), rest:bits>> -> {
-      use #(key, value) <- result.try({
-        let path = [<<"----">>, ..path]
-        read_freeform(payload, path:)
-      })
+      use #(key, value) <- result.try(
+        [<<"----">>, ..path]
+        |> read_freeform(payload, path: _),
+      )
 
-      use tag <- result.try(read_tag([key, ..path], value))
+      let tag = tag.Bits(key, value)
       read_ilst(rest, path:, results: [tag, ..results])
     }
 
     <<size:int-32, 0xa9, kind:bytes-3, payload:bytes-size(size - 8), rest:bits>> -> {
       use #(value, _rest) <- result.try(read_data(payload, path))
-      let key = [<<"_", kind:bits>>, ..path]
-      use tag <- result.try(read_tag(key, value))
+      let tag = tag.Bits(key: <<"_", kind:bits>>, value:)
       read_ilst(rest, path:, results: [tag, ..results])
     }
 
     <<size:int-32, kind:bytes-4, payload:bytes-size(size - 8), rest:bits>> -> {
       use #(value, _rest) <- result.try(read_data(payload, path))
-      let key = [<<kind:bits>>, ..path]
-      use tag <- result.try(read_tag(key, value))
+      let tag = tag.Bits(key: <<kind:bits>>, value:)
       read_ilst(rest, path:, results: [tag, ..results])
     }
 
@@ -171,15 +169,5 @@ fn read_data(
     >> -> Ok(#(payload, rest))
 
     _else -> Error([<<"data">>, ..path])
-  }
-}
-
-fn read_tag(
-  key: List(BitArray),
-  value: BitArray,
-) -> Result(Tag, List(BitArray)) {
-  case key {
-    [key, ..] -> Ok(tag.Bits(key, value))
-    [] -> Error([])
   }
 }

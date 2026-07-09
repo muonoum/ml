@@ -24,7 +24,7 @@ pub fn main() -> Nil {
       tags
     }
 
-    _else -> panic as "file type"
+    _else -> panic as path
   }
 
   use tag <- list.each(tags)
