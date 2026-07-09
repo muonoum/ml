@@ -83,8 +83,7 @@ fn read_ilst(
   case data {
     <<size:int-32, "----", payload:bytes-size(size - 8), rest:bits>> -> {
       use #(key, value) <- result.try(
-        [<<"----">>, ..path]
-        |> read_freeform(payload, path: _),
+        read_freeform(payload, path: [<<"----">>, ..path]),
       )
 
       let tag = tag.Bits(key, value)
