@@ -15,7 +15,7 @@ pub fn read(data: BitArray) -> Result(List(Tag), Nil) {
       let assert Ok(size) = read_synchsafe(size)
 
       case rest {
-        <<frames:bytes-size(size), _rest:bytes>> -> read_frame(frames, [])
+        <<frames:bytes-size(size), _rest:bytes>> -> read_frames(frames, [])
         _else -> Error(Nil)
       }
     }
@@ -24,42 +24,32 @@ pub fn read(data: BitArray) -> Result(List(Tag), Nil) {
   }
 }
 
-fn read_frame(data: BitArray, tags: List(Tag)) -> Result(List(Tag), Nil) {
+fn read_frames(data: BitArray, tags: List(Tag)) -> Result(List(Tag), Nil) {
   case data {
     <<0, _rest:bits>> -> Ok(tags)
 
     <<key:bytes-4, size:bytes-4, _flags:bytes-2, data:bits>> -> {
       use size <- result.try(read_synchsafe(size))
-      read_payload(key:, data:, size:, tags:)
+
+      case data {
+        <<data:bytes-size(size), rest:bits>> -> {
+          use tag <- result.try(read_frame(key, data))
+          read_frames(rest, [tag, ..tags])
+        }
+
+        _else -> Error(Nil)
+      }
     }
 
     _else -> Error(Nil)
   }
 }
 
-fn read_payload(
-  size size: Int,
-  key key: BitArray,
-  data data: BitArray,
-  tags tags: List(Tag),
-) -> Result(List(Tag), Nil) {
-  case key, data {
-    <<"T", key:bytes-3>>, <<payload:bytes-size(size), rest:bits>> -> {
-      use tag <- result.try(read_text_frame(<<"T", key:bits>>, payload))
-      read_frame(rest, [tag, ..tags])
-    }
-
-    <<"APIC">>, <<payload:bytes-size(size), rest:bits>> -> {
-      let tag = tag.Bits(key:, value: payload)
-      read_frame(rest, [tag, ..tags])
-    }
-
-    _else, <<payload:bytes-size(size), rest:bits>> -> {
-      let tag = tag.Parts(key:, values: tag.split_zero(payload))
-      read_frame(rest, [tag, ..tags])
-    }
-
-    _key, _data -> Error(Nil)
+fn read_frame(key: BitArray, data: BitArray) -> Result(Tag, Nil) {
+  case key {
+    <<"T", key:bytes-3>> -> read_text_frame(<<"T", key:bits>>, data)
+    <<"APIC">> -> Ok(tag.Bits(key:, value: data))
+    _else -> Ok(tag.Parts(key:, values: tag.split_zero(data)))
   }
 }
 
